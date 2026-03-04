@@ -28,4 +28,11 @@ def send_movie(message):
 
 if __name__ == "__main__":
     print("Bot ishga tushdi...")
-    bot.infinity_polling()
+    @bot.message_handler(content_types=['video', 'document'])
+def get_file_id(message):
+    if message.video:
+        file_id = message.video.file_id
+    else:
+        file_id = message.document.file_id
+
+    bot.reply_to(message, f"FILE_ID:\n{file_id}") bot.infinity_polling()
