@@ -3,10 +3,10 @@ import json
 import os
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-TOKEN = "BOT_TOKENINGNI_BU_YERGA_QO'Y"
-admin_id = 6401247171
+TOKEN = "8288853849:AAG55nlWKoR1fYm-HoNOargMvHTdmbg8wxw"
+ADMIN_ID = 6401247171
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
 DATA_FILE = "movies.json"
 
@@ -17,14 +17,16 @@ CHANNELS = [
 
 user_subscribe_message = {}
 
-
-# ================= DATA =================
+# ================= SAFE JSON LOAD =================
 
 def load_movies():
-    if os.path.exists(DATA_FILE):
+    if not os.path.exists(DATA_FILE):
+        return {}
+    try:
         with open(DATA_FILE, "r") as f:
             return json.load(f)
-    return {}
+    except:
+        return {}
 
 def save_movies(data):
     with open(DATA_FILE, "w") as f:
@@ -32,8 +34,7 @@ def save_movies(data):
 
 movies = load_movies()
 
-
-# ================= SUBSCRIPTION =================
+# ================= SUB CHECK =================
 
 def check_subscription(user_id):
     for channel in CHANNELS:
@@ -45,30 +46,17 @@ def check_subscription(user_id):
             return False
     return True
 
-
 def subscribe_panel(chat_id, user_id):
 
     markup = InlineKeyboardMarkup()
-
     markup.add(
-        InlineKeyboardButton(
-            "📢 Dramalar olami",
-            url="https://t.me/Dramalar_olami_uzz"
-        )
+        InlineKeyboardButton("📢 Dramalar olami", url="https://t.me/Dramalar_olami_uzz")
     )
-
     markup.add(
-        InlineKeyboardButton(
-            "📢 Trend muzikalar",
-            url="https://t.me/trend_muzikalar_uz_01"
-        )
+        InlineKeyboardButton("📢 Trend muzikalar", url="https://t.me/trend_muzikalar_uz_01")
     )
-
     markup.add(
-        InlineKeyboardButton(
-            "✅ Tekshirish",
-            callback_data="check_sub"
-        )
+        InlineKeyboardButton("✅ Tekshirish", callback_data="check_sub")
     )
 
     if user_id in user_subscribe_message:
@@ -85,6 +73,18 @@ def subscribe_panel(chat_id, user_id):
 
     user_subscribe_message[user_id] = msg.message_id
 
+# ================= START =================
+
+@bot.message_handler(commands=['start'])
+def start(message):
+
+    if not check_subscription(message.from_user.id):
+        subscribe_panel(message.chat.id, message.from_user.id)
+        return
+
+    bot.send_message(message.chat.id, "🎬 Kino kodini yuboring")
+
+# ================= CHECK BUTTON =================
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def check_sub_callback(call):
@@ -101,94 +101,9 @@ def check_sub_callback(call):
                 pass
             del user_subscribe_message[user_id]
 
-        bot.send_message(chat_id, "✅ Obuna tasdiqlandi!\n\n🎬 Kino kodini yuboring.")
+        bot.send_message(chat_id, "✅ Obuna tasdiqlandi!\n\n🎬 Endi kino kodini yuboring.")
     else:
-        bot.answer_callback_query(
-            call.id,
-            "❌ Ikkala kanalga ham obuna bo‘ling",
-            show_alert=True
-        )
-
-
-# ================= START =================
-
-@bot.message_handler(commands=['start'])
-def start(message):
-
-    if not check_subscription(message.from_user.id):
-        subscribe_panel(message.chat.id, message.from_user.id)
-        return
-
-    bot.send_message(message.chat.id, "🎬 Kino kodini yuboring")
-
-
-# ================= ADD MOVIE =================
-
-@bot.message_handler(commands=['add'])
-def add_movie(message):
-
-    if message.from_user.id != admin_id:
-        return
-
-    args = message.text.split(maxsplit=5)
-
-    if len(args) < 6:
-        bot.reply_to(message, "Foydalanish:\n/add kod nom janr reyting tavsif")
-        return
-
-    code = args[1]
-    name = args[2]
-    genre = args[3]
-    rating = args[4]
-    description = args[5]
-
-    bot.reply_to(message, "Poster rasm yuboring.")
-    bot.register_next_step_handler(
-        message,
-        get_poster,
-        code, name, genre, rating, description
-    )
-
-
-def get_poster(message, code, name, genre, rating, description):
-
-    if not message.photo:
-        bot.reply_to(message, "Poster rasm yuboring.")
-        return
-
-    poster_id = message.photo[-1].file_id
-
-    bot.reply_to(message, "Video yuboring.")
-    bot.register_next_step_handler(
-        message,
-        save_movie,
-        code, name, genre, rating, description, poster_id
-    )
-
-
-def save_movie(message, code, name, genre, rating, description, poster_id):
-
-    if not message.video:
-        bot.reply_to(message, "Video yuboring.")
-        return
-
-    file_id = message.video.file_id
-
-    movies[code] = {
-        "file_id": file_id,
-        "poster_id": poster_id,
-        "name": name,
-        "genre": genre,
-        "rating": rating,
-        "description": description,
-        "views": 0,
-        "weekly_views": 0
-    }
-
-    save_movies(movies)
-
-    bot.reply_to(message, f"✅ {name} saqlandi. Kod: {code}")
-
+        bot.answer_callback_query(call.id, "❌ Ikkala kanalga ham obuna bo‘ling", show_alert=True)
 
 # ================= SEND MOVIE =================
 
@@ -212,7 +127,7 @@ def send_movie(message):
     data = movies[code]
 
     caption = f"""
-🎬 {data['name']}
+🎬 <b>{data['name']}</b>
 
 🎭 Janr: {data['genre']}
 ⭐ Reyting: {data['rating']}
@@ -233,34 +148,6 @@ def send_movie(message):
         protect_content=True
     )
 
+# ================= RUN =================
 
-# ================= TREND =================
-
-@bot.message_handler(commands=['trend'])
-def show_trend(message):
-
-    if not check_subscription(message.from_user.id):
-        subscribe_panel(message.chat.id, message.from_user.id)
-        return
-
-    if not movies:
-        bot.send_message(message.chat.id, "Hozircha kinolar yo‘q")
-        return
-
-    sorted_movies = sorted(
-        movies.items(),
-        key=lambda x: x[1]["weekly_views"],
-        reverse=True
-    )[:10]
-
-    text = "🏆 7 KUNLIK TREND\n\n"
-    medals = ["🥇", "🥈", "🥉"]
-
-    for i, (code, data) in enumerate(sorted_movies):
-        medal = medals[i] if i < 3 else f"{i+1}."
-        text += f"{medal} {data['name']} — {data['weekly_views']} marta\n"
-
-    bot.send_message(message.chat.id, text)
-
-
-bot.infinity_polling()
+bot.infinity_polling(skip_pending=True)
