@@ -1,10 +1,11 @@
-TOKEN = "8288853849:AAG55nlWKoR1fYm-HoNOargMvHTdmbg8wxw"
+TOKEN = "8288853849:AAFfJaYec6NgTldlZp2R7svby5iSLc8lB8E"
 
 ADMIN_ID = 6401247171
 
 CHANNELS = [
-    "@kanal1",
-    "@kanal2"
+"@trend_muzikalar_uz_01",
+"@Dramalar_olami_uzz",
+"@daxshat_kinolar_uzzz"
 ]
 
-MOVIES_PER_PAGE = 10
+UPLOAD_CHANNEL = "@daxshat_kinolar_uzzz"
