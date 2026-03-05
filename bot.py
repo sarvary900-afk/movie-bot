@@ -1,80 +1,254 @@
 import telebot
-from telebot import types
+import sqlite3
+import random
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = "8288853849:AAG55nlWKoR1fYm-HoNOargMvHTdmbg8wxw"
-
-bot = telebot.TeleBot(BOT_TOKEN)
-
+TOKEN = "BOT_TOKEN"
 ADMIN_ID = 6401247171
 
-CHANNELS = [
-"@Dramalar_olami_uzz",
-"@trend_muzikalar_uz_01"
-]
+CHANNELS = ["@kanal1","@kanal2"]
 
-movies = {
-"777": {
-"name": "Test Kino",
-"file_id": "BAACAgEAAxkBAAMGaahynCZPu32jml-N6gr35uXbuaEAAqQJAAImbzFFwH61tu76gxQ6BA",
-"views": 0
-}
-}
+bot = telebot.TeleBot(TOKEN)
+
+db = sqlite3.connect("kino.db",check_same_thread=False)
+sql = db.cursor()
+
+sql.execute("""CREATE TABLE IF NOT EXISTS movies(
+code TEXT,
+name TEXT,
+genre TEXT,
+file_id TEXT,
+views INTEGER,
+premium INTEGER
+)""")
+
+sql.execute("""CREATE TABLE IF NOT EXISTS users(
+user_id INTEGER,
+ref INTEGER
+)""")
+
+waiting_movie = {}
+
+MOVIES_PER_PAGE = 10
+
 
 def check_sub(user_id):
-    for channel in CHANNELS:
-        status = bot.get_chat_member(channel, user_id).status
-        if status not in ["member","administrator","creator"]:
+
+    for ch in CHANNELS:
+
+        try:
+            status = bot.get_chat_member(ch,user_id).status
+
+            if status not in ["member","administrator","creator"]:
+                return False
+        except:
             return False
+
     return True
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
+
+    user = message.from_user.id
+
+    ref = None
+
+    try:
+        ref = int(message.text.split()[1])
+    except:
+        pass
+
+    sql.execute("SELECT user_id FROM users WHERE user_id=?",(user,))
+    if not sql.fetchone():
+        sql.execute("INSERT INTO users VALUES (?,?)",(user,ref))
+        db.commit()
+
+    if not check_sub(user):
+
+        text="❗ Avval kanallarga obuna bo‘ling\n\n"
+
+        for ch in CHANNELS:
+            text+=f"{ch}\n"
+
+        bot.send_message(message.chat.id,text)
+        return
+
     bot.send_message(message.chat.id,"🎬 Kino kodini yuboring")
 
-@bot.message_handler(commands=['add'])
-def add_movie(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    bot.send_message(message.chat.id,"Kino kodi va nomini yuboring:\nMasalan: 101|Avatar")
 
-@bot.message_handler(func=lambda m: "|" in m.text and m.from_user.id == ADMIN_ID)
-def get_movie_info(message):
-    code,name = message.text.split("|")
-    movies[code] = {"name":name,"file_id":None,"views":0}
-    bot.send_message(message.chat.id,"Endi kino videosini yuboring")
+@bot.message_handler(func=lambda m: m.text.startswith("/"))
+def add_movie(message):
+
+    if message.from_user.id!=ADMIN_ID:
+        return
+
+    try:
+
+        text=message.text[1:]
+
+        code,name=text.split(" ",1)
+
+        waiting_movie[message.from_user.id]=(code,name,"Drama",0)
+
+        bot.send_message(message.chat.id,"🎬 Endi kino videosini yuboring")
+
+    except:
+
+        bot.send_message(message.chat.id,"❌ Format:\n/256 Kino nomi")
+
 
 @bot.message_handler(content_types=['video'])
-def save_video(message):
-    if message.from_user.id != ADMIN_ID:
+def save_movie(message):
+
+    if message.from_user.id in waiting_movie:
+
+        code,name,genre,premium=waiting_movie[message.from_user.id]
+
+        sql.execute(
+        "INSERT INTO movies VALUES (?,?,?,?,?,?)",
+        (code,name,genre,message.video.file_id,0,premium)
+        )
+
+        db.commit()
+
+        del waiting_movie[message.from_user.id]
+
+        bot.send_message(message.chat.id,"✅ Kino saqlandi")
+
+
+@bot.message_handler(commands=['list'])
+def list_movies(message):
+
+    show_page(message.chat.id,1)
+
+
+def show_page(chat_id,page):
+
+    offset=(page-1)*MOVIES_PER_PAGE
+
+    sql.execute(
+    "SELECT code,name FROM movies LIMIT ? OFFSET ?",
+    (MOVIES_PER_PAGE,offset)
+    )
+
+    movies=sql.fetchall()
+
+    text=f"🎬 Kino mundarijasi ({page}-bet)\n\n"
+
+    for m in movies:
+        text+=f"{m[0]} — {m[1]}\n"
+
+    keyboard=InlineKeyboardMarkup()
+
+    keyboard.row(
+    InlineKeyboardButton("⬅️",callback_data=f"page_{page-1}"),
+    InlineKeyboardButton(str(page),callback_data="none"),
+    InlineKeyboardButton("➡️",callback_data=f"page_{page+1}")
+    )
+
+    bot.send_message(chat_id,text,reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("page_"))
+def page_callback(call):
+
+    page=int(call.data.split("_")[1])
+
+    if page<1:
         return
-    file_id = message.video.file_id
-    for code in movies:
-        if movies[code]["file_id"] is None:
-            movies[code]["file_id"] = file_id
-            bot.send_message(message.chat.id,f"Kino qo‘shildi ✅\nKod: {code}")
-            break
+
+    show_page(call.message.chat.id,page)
+
+
+@bot.message_handler(commands=['top'])
+def top_movies(message):
+
+    sql.execute("SELECT name,views FROM movies ORDER BY views DESC LIMIT 10")
+
+    movies=sql.fetchall()
+
+    text="🏆 TOP 10 kinolar\n\n"
+
+    for i,m in enumerate(movies,1):
+
+        text+=f"{i}. {m[0]} — {m[1]} qidiruv\n"
+
+    bot.send_message(message.chat.id,text)
+
+
+@bot.message_handler(commands=['random'])
+def random_movie(message):
+
+    sql.execute("SELECT * FROM movies")
+
+    movies=sql.fetchall()
+
+    if movies:
+
+        movie=random.choice(movies)
+
+        bot.send_video(
+        message.chat.id,
+        movie[3],
+        caption=f"🎬 {movie[1]}",
+        protect_content=True
+        )
+
+
+@bot.message_handler(commands=['stats'])
+def stats(message):
+
+    if message.from_user.id!=ADMIN_ID:
+        return
+
+    sql.execute("SELECT COUNT(*) FROM users")
+
+    count=sql.fetchone()[0]
+
+    bot.send_message(message.chat.id,f"👥 Userlar soni: {count}")
+
 
 @bot.message_handler(func=lambda m: True)
 def send_movie(message):
-    user_id = message.from_user.id
-    
-    if not check_sub(user_id):
-        bot.send_message(message.chat.id,"❌ Avval kanallarga obuna bo‘ling")
+
+    text=message.text.replace("/","")
+
+    sql.execute("SELECT * FROM movies WHERE code=?",(text,))
+    movie=sql.fetchone()
+
+    if movie:
+
+        views=movie[4]+1
+
+        sql.execute("UPDATE movies SET views=? WHERE code=?",(views,text))
+        db.commit()
+
+        bot.send_video(
+        message.chat.id,
+        movie[3],
+        caption=f"🎬 {movie[1]}\n\n📊 Qidirilgan: {views}",
+        protect_content=True
+        )
+
         return
-    
-    code = message.text
-    
-    if code in movies:
-        movies[code]["views"] += 1
-        
-        name = movies[code]["name"]
-        views = movies[code]["views"]
-        file_id = movies[code]["file_id"]
-        
-        bot.send_message(message.chat.id,f"🎬 {name}\n📊 Qidirilgan: {views} marta")
-        bot.send_video(message.chat.id,file_id)
-        
+
+    sql.execute("SELECT code,name FROM movies WHERE name LIKE ?",('%'+text+'%',))
+
+    res=sql.fetchall()
+
+    if res:
+
+        msg="🔎 Topilgan kinolar\n\n"
+
+        for r in res:
+            msg+=f"{r[0]} — {r[1]}\n"
+
+        bot.send_message(message.chat.id,msg)
+
     else:
-        bot.send_message(message.chat.id,"❌ Bunday kino topilmadi")
+
+        bot.send_message(message.chat.id,"❌ Kino topilmadi")
+
 
 bot.infinity_polling()
