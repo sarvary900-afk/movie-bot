@@ -1,1 +1,10 @@
+TOKEN = "8288853849:AAG55nlWKoR1fYm-HoNOargMvHTdmbg8wxw"
 
+ADMIN_ID = 6401247171
+
+CHANNELS = [
+    "@kanal1",
+    "@kanal2"
+]
+
+MOVIES_PER_PAGE = 10
