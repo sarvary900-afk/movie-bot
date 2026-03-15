@@ -1,6 +1,3 @@
-# config.py (GitHub uchun yangilangan versiya)
-
-# Bot tokeni
 BOT_TOKEN = "8288853849:AAFfJaYec6NgTldlZp2R7svby5iSLc8lB8E"
 
 # Admin ID
