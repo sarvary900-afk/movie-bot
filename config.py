@@ -6,3 +6,5 @@ KANALLAR = [
     {"name": "Dramalar Olami UZZ", "url": "https://t.me/Dramalar_olami_uzz"},
     {"name": "Daxshat Kinolar UZZZ", "url": "https://t.me/daxshat_kinolar_uzzz"}
 ]
+
+UPLOAD_CHANNEL = "https://t.me/daxshat_kinolar_uzzz"
